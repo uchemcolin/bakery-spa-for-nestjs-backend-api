@@ -1,24 +1,25 @@
 ================================================================================
-BAKERY SPA — Nuxt 4 + Laravel 12 + Keycloak
+BAKERY SPA — Nuxt 4 + NestJS + Keycloak
 ================================================================================
 
-A full-stack Single Sign-On (SSO) demonstration using Nuxt 4, Laravel 12,
-and Keycloak.
+A full-stack Single Sign-On (SSO) demonstration using Nuxt 4, NestJS, and
+Keycloak.
 
-A Nuxt 4 single-page application (SPA) delegates authentication to a Laravel
-12 API acting as a Backend-for-Frontend (BFF). Laravel communicates with
-Keycloak using OpenID Connect (OIDC) and owns the authenticated server-side
-session.
+The Nuxt 4 application acts as the frontend SPA.
 
-The SPA never communicates directly with Keycloak and never receives, stores,
-or processes OIDC access tokens, ID tokens, or refresh tokens.
+NestJS acts as the Backend-for-Frontend (BFF) and owns the OpenID Connect
+authentication flow with Keycloak.
 
-Instead, the SPA communicates exclusively with the Laravel BFF. Laravel
-handles the authentication flow, maintains the server-side session, and
-returns only the necessary authenticated user information to the SPA.
+Keycloak is the Identity Provider.
 
-The SPA therefore knows only whether the Laravel session is authenticated
-and, when authenticated, receives the application's user representation.
+The Nuxt application does NOT communicate directly with Keycloak.
+
+Instead, the browser is redirected to the NestJS authentication endpoints.
+NestJS communicates with Keycloak, validates the OIDC callback, creates the
+application authentication session, and exposes authenticated API endpoints
+to the Nuxt application.
+
+The frontend therefore does not need to understand the Keycloak OIDC flow.
 
 
 ================================================================================
@@ -30,151 +31,233 @@ Browser
    v
 Nuxt 4 SPA
    |
-   | Session Cookie
+   | HTTP requests + authentication cookie
    v
-Laravel 12 BFF
+NestJS API / BFF
    |
    | OpenID Connect
    v
 Keycloak
 
 
-Authentication flow:
+Local development:
 
-Browser
-   |
-   | 1. Visit Nuxt application
-   v
-Nuxt 4
-   |
-   | 2. User clicks Sign In
-   v
-Laravel /sso/redirect
-   |
-   | 3. OIDC authorization request
-   v
-Keycloak
-   |
-   | 4. User authenticates
-   |
-   | 5. Authorization callback
-   v
-Laravel /sso/callback
-   |
-   | 6. Laravel validates/exchanges OIDC code
-   | 7. Laravel creates/updates local user
-   | 8. Laravel creates authenticated session
-   v
-Nuxt /dashboard
-   |
-   | 9. GET /api/user with session cookie
-   v
-Laravel
-   |
-   | 10. Authenticated user JSON
-   v
-Nuxt
+    Nuxt:
+        http://localhost:3001
+
+    NestJS:
+        http://localhost:8001
+
+    Keycloak:
+        http://localhost:9000
+
+    Keycloak Realm:
+        myapp
+
+
+The important separation is:
+
+    Nuxt
+       |
+       | Browser authentication/navigation
+       v
+    NestJS
+       |
+       | OIDC
+       v
+    Keycloak
+
+
+The Nuxt application does NOT directly communicate with:
+
+    http://localhost:9000
+
+
+All authentication-related communication is initiated through NestJS.
+
+
+================================================================================
+AUTHENTICATION MODEL
+================================================================================
+
+NestJS is the OIDC client.
+
+Nuxt is NOT the OIDC client.
+
+The browser does not need to receive or process Keycloak access tokens,
+ID tokens, refresh tokens, or client secrets.
+
+The intended authentication flow is:
+
+    Browser
+       |
+       | 1. User clicks "Sign in"
+       v
+    Nuxt
+       |
+       | 2. Browser navigates to:
+       |    http://localhost:8001/sso/redirect
+       v
+    NestJS
+       |
+       | 3. Creates OIDC authorization request
+       v
+    Keycloak
+       |
+       | 4. User authenticates
+       |
+       | 5. Keycloak redirects to:
+       |    http://localhost:8001/sso/callback
+       v
+    NestJS
+       |
+       | 6. Validates callback
+       | 7. Exchanges authorization code
+       | 8. Resolves local user
+       | 9. Creates application session
+       v
+    Browser
+       |
+       | 10. NestJS redirects browser to Nuxt
+       v
+    Nuxt /dashboard
+       |
+       | 11. GET /api/user
+       v
+    NestJS
+       |
+       | 12. Authenticated user JSON
+       v
+    Nuxt
+
+
+IMPORTANT:
+
+The Keycloak authorization callback belongs to NestJS.
+
+It does NOT belong to Nuxt.
+
+Therefore the Keycloak redirect URI should be:
+
+    http://localhost:8001/sso/callback
+
+
+NOT:
+
+    http://localhost:3001/callback
+
+and NOT:
+
+    http://localhost:3001/sso/callback
 
 
 ================================================================================
 KEY CHARACTERISTICS
 ================================================================================
 
-- Server-side authentication through Laravel
-- Keycloak SSO using OpenID Connect
-- Laravel acts as the OIDC client
-- Laravel acts as the Backend-for-Frontend (BFF)
-- Laravel owns the authenticated application session
-- Laravel Sanctum stateful SPA authentication
-- HttpOnly session-based authentication
-- Federated logout
-- No OIDC tokens stored in the browser
-- No OIDC tokens exposed to the Nuxt application
-- Nuxt SSR cookie forwarding
-- Explicit CORS configuration
-- Explicit CSRF configuration
-- User identity persisted locally in Laravel
-- Nuxt authentication state derived from Laravel /api/user
+- Nuxt 4 frontend
+- NestJS backend API
+- NestJS acts as the BFF
+- Keycloak acts as the Identity Provider
+- NestJS owns the OIDC flow
+- NestJS owns the OIDC callback
+- NestJS creates the authenticated application session
+- Nuxt does not communicate directly with Keycloak
+- Nuxt does not implement OIDC
+- Nuxt does not exchange Keycloak authorization codes
+- Nuxt does not validate Keycloak tokens
+- Nuxt does not store Keycloak access tokens
+- Nuxt does not store Keycloak ID tokens
+- Nuxt does not store Keycloak refresh tokens
+- Client secrets remain on NestJS
+- Authentication state is obtained from NestJS
+- Authenticated user information is obtained from NestJS
+- Browser authentication uses the NestJS session cookie
+- NestJS exposes authenticated application endpoints
+- Federated logout can terminate the Keycloak SSO session
 
 
 ================================================================================
 TABLE OF CONTENTS
 ================================================================================
 
-  1. What This Project Does
-  2. Architecture
-  3. Authentication Model
-  4. Requirements
-  5. Setup Steps
-  6. Directory Structure
-  7. Configuration Reference
-  8. Key Files
-  9. Authentication Flow
- 10. Testing the SPA
- 11. Common Errors and Fixes
- 12. Production Migration Checklist
- 13. Security Notes
- 14. Related Projects
- 15. Author
+1.  What This Project Does
+2.  Architecture
+3.  Authentication Model
+4.  Requirements
+5.  Local Development Ports
+6.  Keycloak Configuration
+7.  Nuxt Configuration
+8.  Directory Structure
+9.  Authentication Flow
+10. Authentication Composable
+11. Authentication Middleware
+12. Login Page
+13. Callback Page
+14. Dashboard
+15. NestJS API Endpoints
+16. Cookie and CORS Configuration
+17. Testing the Authentication Flow
+18. Common Errors and Fixes
+19. Production Migration Checklist
+20. Security Notes
+21. Related Projects
+22. Author
 
 
 ================================================================================
 1. WHAT THIS PROJECT DOES
 ================================================================================
 
-The Bakery SPA is a Nuxt 4 frontend that uses Laravel 12 as a Backend-for-
-Frontend (BFF) for authentication.
+The Bakery SPA is a Nuxt 4 frontend that uses NestJS as a Backend-for-Frontend
+(BFF).
 
-The SPA:
+The frontend is responsible for:
 
-- Renders the user interface
-- Calls Laravel /api/user to determine the current authenticated user
-- Calls Laravel /api/logout to terminate the application session
-- Redirects the browser to Laravel /sso/redirect to begin login
-- Receives no OIDC access token
-- Receives no OIDC ID token
-- Receives no OIDC refresh token
-- Stores no OIDC tokens in localStorage
-- Stores no OIDC tokens in sessionStorage
-- Does not communicate directly with Keycloak
-- Uses the Laravel session cookie for authenticated requests
-- Displays the authenticated user's application profile
-- Redirects unauthenticated users to /login
-- Redirects authenticated users away from the login page
-- Supports federated logout through the logout URL returned by Laravel
+- Rendering the application UI
+- Displaying authentication state
+- Redirecting the browser to NestJS for login
+- Calling NestJS authenticated API endpoints
+- Displaying the authenticated user
+- Redirecting unauthenticated users to /login
+- Logging out through NestJS
+- Following the federated logout URL returned by NestJS when available
 
 
-The SPA does NOT:
+The frontend does NOT:
 
-- Talk directly to Keycloak
-- Handle OIDC discovery
-- Handle OIDC authorization
-- Handle OIDC token exchange
-- Handle OIDC access tokens
-- Handle OIDC ID tokens
-- Handle OIDC refresh tokens
-- Store tokens in browser storage
-- Store client secrets
-- Validate OIDC tokens
-- Decide whether an OIDC identity is trustworthy
-- Create Laravel sessions
-- Authenticate users independently of Laravel
+- Communicate directly with Keycloak
+- Implement OpenID Connect
+- Perform OIDC discovery
+- Build Keycloak authorization requests
+- Exchange Keycloak authorization codes
+- Validate Keycloak ID tokens
+- Validate Keycloak access tokens
+- Store Keycloak access tokens
+- Store Keycloak ID tokens
+- Store Keycloak refresh tokens
+- Store Keycloak client secrets
+- Authenticate users independently of NestJS
+- Determine whether a Keycloak identity is trustworthy
+
+
+Authentication decisions belong to NestJS.
 
 
 ================================================================================
 2. ARCHITECTURE
 ================================================================================
 
-Local development uses the following services:
+Local development uses:
 
-Nuxt:
-    http://localhost:3000
+    Nuxt:
+        http://localhost:3001
 
-Laravel:
-    http://localhost:8000
+    NestJS:
+        http://localhost:8001
 
-Keycloak:
-    http://localhost:9000
+    Keycloak:
+        http://localhost:9000
 
 
 Application architecture:
@@ -187,17 +270,19 @@ Application architecture:
                 v
     +-----------------------+
     |       Nuxt 4 SPA      |
-    |   localhost:3000      |
+    |   localhost:3001      |
     +-----------+-----------+
                 |
-                | Session Cookie
+                | HTTP
+                | Cookies
                 | /api/user
                 | /api/logout
                 |
                 v
     +-----------------------+
-    |     Laravel 12 BFF    |
-    |   localhost:8000      |
+    |      NestJS API       |
+    |       / BFF           |
+    |   localhost:8001      |
     +-----------+-----------+
                 |
                 | OpenID Connect
@@ -209,95 +294,100 @@ Application architecture:
     +-----------------------+
 
 
-The SPA communicates with Laravel.
+The frontend communicates with NestJS.
 
-Laravel communicates with Keycloak.
+NestJS communicates with Keycloak.
 
-The SPA does not communicate directly with Keycloak.
+The frontend does not communicate directly with Keycloak.
 
 
-There are two important authentication sessions.
+There are two authentication sessions.
 
 1. Keycloak SSO session
 
    Owned by Keycloak.
 
-   This session determines whether the user is already authenticated with
-   the Identity Provider.
+   This session determines whether the user is authenticated with the
+   Identity Provider.
 
-2. Laravel application session
+2. NestJS application session
 
-   Owned by Laravel.
+   Owned by NestJS.
 
    This session determines whether the browser is authenticated to the
    Bakery application.
 
-The SPA does not inspect Keycloak's session.
 
-The SPA asks Laravel:
+The Nuxt application should not inspect the Keycloak session directly.
+
+Instead, it asks NestJS:
 
     GET /api/user
 
-If Laravel recognizes the session, it returns the authenticated user.
 
-If Laravel does not recognize the session, it returns HTTP 401.
+If NestJS recognizes the session:
+
+    HTTP 200
+
+
+If NestJS does not recognize the session:
+
+    HTTP 401
 
 
 ================================================================================
 3. AUTHENTICATION MODEL
 ================================================================================
 
-The authentication architecture follows a Backend-for-Frontend model.
+NestJS is responsible for authentication.
 
-The browser is not an OIDC client.
+The browser is simply redirected through the authentication flow.
 
-Laravel is the OIDC client.
-
-The flow is:
+The complete flow is:
 
     Browser
        |
        | GET /sso/redirect
        v
-    Laravel
+    NestJS
        |
        | OIDC Authorization Request
        v
     Keycloak
        |
-       | Login
+       | User Login
        |
        | Authorization Code
        v
-    Laravel /sso/callback
+    NestJS /sso/callback
        |
-       | Exchange code
+       | Exchange authorization code
        | Validate identity
        | Find/create local user
-       | Create Laravel session
+       | Create application session
        v
     Browser
        |
-       | Laravel session cookie
+       | Session cookie
        v
     Nuxt SPA
 
 
-After login:
+After successful authentication:
 
     Nuxt
        |
        | GET /api/user
-       | Cookie: Laravel session
+       | Cookie: NestJS session
        v
-    Laravel
+    NestJS
        |
        | Authenticated user
        v
     Nuxt
 
 
-The browser never receives:
+The frontend should not receive:
 
     access_token
     id_token
@@ -305,7 +395,7 @@ The browser never receives:
     client_secret
 
 
-The browser receives only the normal Laravel application session cookie.
+The frontend should only need the authenticated application session.
 
 
 ================================================================================
@@ -316,36 +406,16 @@ Required software:
 
 - Node.js 20 or newer
 - npm
-- PHP 8.2 or newer
-- Composer
-- Laravel 12
+- NestJS
+- Prisma
+- PostgreSQL or the configured application database
 - Keycloak 26.x or compatible
 - A modern browser
 
 
-Required running services:
+Recommended Node.js version:
 
-    Nuxt:
-        http://localhost:3000
-
-    Laravel:
-        http://localhost:8000
-
-    Keycloak:
-        http://localhost:9000
-
-
-Keycloak requirements:
-
-    Realm:
-        myapp
-
-    Client:
-        nuxt-laravel-bakery
-
-The Keycloak client is used by Laravel.
-
-The Nuxt SPA is not the OIDC client.
+    Node.js 20+
 
 
 Check Node:
@@ -353,239 +423,124 @@ Check Node:
     node -v
 
 
-Check PHP:
+Check npm:
 
-    php -v
+    npm -v
 
 
-Check Composer:
+Check NestJS project:
 
-    composer --version
+    npm run start:dev
+
+
+Check Prisma:
+
+    npx prisma --version
 
 
 ================================================================================
-5. SETUP STEPS
+5. LOCAL DEVELOPMENT PORTS
 ================================================================================
 
-5.1 Create the Nuxt project
+The local development environment uses:
 
-    npx nuxi@latest init bakery-spa
+    Nuxt:
+        http://localhost:3001
 
-    cd bakery-spa
+    NestJS:
+        http://localhost:8001
 
-
-Choose:
-
-    Package manager:
-        npm
-
-    Initialize git:
-        your choice
-
-    Install dependencies:
-        yes
+    Keycloak:
+        http://localhost:9000
 
 
-5.2 Install dependencies
+Do not accidentally use the old Laravel ports.
 
-    npm install
+The current architecture is:
 
+    Nuxt:
+        3001
 
-5.3 Bootstrap
+    NestJS:
+        8001
 
-Bootstrap is loaded through the CDN configured in nuxt.config.ts.
-
-No Bootstrap npm package is required.
-
-
-5.4 Create the Nuxt source files
-
-Nuxt 4 uses the app/ directory for application source code.
-
-Create:
-
-    app/
-      app.vue
-      composables/
-        useAuth.ts
-      layouts/
-        default.vue
-      middleware/
-        auth.ts
-        guest.ts
-      pages/
-        index.vue
-        login.vue
-        callback.vue
-        dashboard.vue
+    Keycloak:
+        9000
 
 
-5.5 Configure runtime configuration
+The authentication callback belongs to NestJS:
 
-The Nuxt application needs:
-
-    apiBase
-    loginUrl
+    http://localhost:8001/sso/callback
 
 
-Local values:
+The login endpoint belongs to NestJS:
 
-    apiBase:
-        http://localhost:8000
-
-    loginUrl:
-        http://localhost:8000/sso/redirect
+    http://localhost:8001/sso/redirect
 
 
-5.6 Start Nuxt
+The API belongs to NestJS:
 
-    npm run dev
-
-
-Nuxt should listen on:
-
-    http://localhost:3000
+    http://localhost:8001/api
 
 
-5.7 Start Laravel
+================================================================================
+6. KEYCLOAK CONFIGURATION
+================================================================================
 
-From the Laravel project:
+Keycloak Realm:
 
-    php artisan serve
-
-
-Laravel should listen on:
-
-    http://localhost:8000
+    myapp
 
 
-5.8 Start Keycloak
-
-Example:
-
-    cd ~/keycloak/keycloak-26.x.x
-
-    export JAVA_HOME=$(/usr/libexec/java_home -v 21)
-
-    bin/kc.sh start-dev --http-port=9000
-
-
-Keycloak should listen on:
+Keycloak:
 
     http://localhost:9000
 
 
-================================================================================
-6. DIRECTORY STRUCTURE
-================================================================================
+Realm:
 
-bakery-spa/
-|
-+-- nuxt.config.ts
-+-- package.json
-|
-+-- app/
-    |
-    +-- app.vue
-    |
-    +-- composables/
-    |   |
-    |   +-- useAuth.ts
-    |
-    +-- layouts/
-    |   |
-    |   +-- default.vue
-    |
-    +-- middleware/
-    |   |
-    |   +-- auth.ts
-    |   +-- guest.ts
-    |
-    +-- pages/
-        |
-        +-- index.vue
-        +-- login.vue
-        +-- callback.vue
-        +-- dashboard.vue
+    http://localhost:9000/realms/myapp
 
 
-Important:
+The Keycloak client is used by NestJS.
 
-Nuxt 4 uses app/ as the application source directory.
-
-The pages should therefore be placed under:
-
-    app/pages/
+The Nuxt application is NOT the Keycloak OIDC client.
 
 
-Middleware should be placed under:
+The client should have a redirect URI matching NestJS:
 
-    app/middleware/
+    http://localhost:8001/sso/callback
 
 
-Composables should be placed under:
+The client should NOT use:
 
-    app/composables/
+    http://localhost:3001/callback
+
+
+unless the architecture is intentionally changed so that Nuxt becomes the
+OIDC client.
+
+
+For the current BFF architecture, NestJS owns the callback.
+
+
+Post-logout redirect should point back to the Nuxt application.
+
+Example:
+
+    http://localhost:3001
+
+
+The exact URI must also be registered in Keycloak.
 
 
 ================================================================================
-7. CONFIGURATION REFERENCE
+7. NUXT CONFIGURATION
 ================================================================================
 
-7.1 Runtime configuration
+Nuxt runtime configuration should point to NestJS.
 
-Two public runtime configuration values drive the authentication integration.
-
-    apiBase
-
-        http://localhost:8000
-
-        Laravel API origin.
-
-
-    loginUrl
-
-        http://localhost:8000/sso/redirect
-
-        Laravel endpoint that starts the OIDC authentication flow.
-
-
-Local ports:
-
-    Nuxt:
-        localhost:3000
-
-    Laravel:
-        localhost:8000
-
-    Keycloak:
-        localhost:9000
-
-
-Use localhost consistently during local development.
-
-Do not mix:
-
-    localhost
-
-with:
-
-    127.0.0.1
-
-for the same authentication flow.
-
-Cookie behavior, CORS configuration, redirect URLs, and browser security
-rules can differ when the hosts are changed.
-
-
-================================================================================
-8. KEY FILES
-================================================================================
-
-
---------------------------------------------------------------------------------
-8.1 nuxt.config.ts
---------------------------------------------------------------------------------
+Example:
 
     export default defineNuxtConfig({
       compatibilityDate: '2025-01-01',
@@ -596,47 +551,306 @@ rules can differ when the hosts are changed.
 
       runtimeConfig: {
         public: {
-          apiBase: 'http://localhost:8000',
-          loginUrl: 'http://localhost:8000/sso/redirect',
-        },
-      },
-
-      app: {
-        head: {
-          title: 'Bakery SSO',
-
-          link: [
-            {
-              rel: 'stylesheet',
-              href: 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css',
-            },
-          ],
-
-          script: [
-            {
-              src: 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js',
-              tagPosition: 'bodyClose',
-            },
-          ],
+          apiBase: 'http://localhost:8001',
+          loginUrl: 'http://localhost:8001/sso/redirect',
         },
       },
     })
 
 
---------------------------------------------------------------------------------
-8.2 app/app.vue
---------------------------------------------------------------------------------
+The important values are:
 
-    <template>
-      <NuxtLayout>
-        <NuxtPage />
-      </NuxtLayout>
-    </template>
+    apiBase:
+
+        http://localhost:8001
 
 
+    loginUrl:
+
+        http://localhost:8001/sso/redirect
+
+
+The frontend must not point these values to Keycloak.
+
+
+Do NOT configure:
+
+    apiBase:
+        http://localhost:9000
+
+
+Do NOT configure:
+
+    loginUrl:
+        http://localhost:9000/realms/myapp/...
+
+
+Nuxt should only know the NestJS API and login endpoints.
+
+
+================================================================================
+8. DIRECTORY STRUCTURE
+================================================================================
+
+Nuxt 4 uses the app/ directory for application source code.
+
+Example:
+
+    bakery-spa/
+    |
+    +-- nuxt.config.ts
+    +-- package.json
+    |
+    +-- app/
+        |
+        +-- app.vue
+        |
+        +-- composables/
+        |   |
+        |   +-- useAuth.ts
+        |
+        +-- layouts/
+        |   |
+        |   +-- default.vue
+        |
+        +-- middleware/
+        |   |
+        |   +-- auth.ts
+        |   +-- guest.ts
+        |
+        +-- pages/
+            |
+            +-- index.vue
+            +-- login.vue
+            +-- dashboard.vue
+
+
+A callback page is generally NOT required when NestJS owns the OIDC callback.
+
+The browser should return from:
+
+    NestJS /sso/callback
+
+
+directly to:
+
+    Nuxt /dashboard
+
+
+Therefore the preferred architecture does not require:
+
+    app/pages/callback.vue
+
+
+================================================================================
+9. AUTHENTICATION FLOW
+================================================================================
+
+9.1 User opens the application
+
+Browser opens:
+
+    http://localhost:3001
+
+
+Nuxt checks the current authentication state.
+
+The frontend may request:
+
+    GET http://localhost:8001/api/user
+
+
+If the NestJS session exists:
+
+    HTTP 200
+
+
+Example response:
+
+    {
+        "id": 1,
+        "name": "Test User",
+        "email": "test@example.com",
+        "oidc_issuer": "http://localhost:9000/realms/myapp",
+        "oidc_subject": "abc123"
+    }
+
+
+If the user is not authenticated:
+
+    HTTP 401
+
+
+Nuxt then treats the user as unauthenticated.
+
+
 --------------------------------------------------------------------------------
-8.3 app/composables/useAuth.ts
+9.2 User clicks Sign In
 --------------------------------------------------------------------------------
+
+The Nuxt login function redirects the browser to:
+
+    http://localhost:8001/sso/redirect
+
+
+NestJS creates the OIDC authorization request.
+
+
+The browser is redirected to Keycloak.
+
+
+Keycloak displays its login page if there is no existing SSO session.
+
+
+After successful login, Keycloak redirects to:
+
+    http://localhost:8001/sso/callback
+
+
+NestJS receives the authorization code.
+
+
+NestJS then:
+
+- validates the OIDC response
+- exchanges the authorization code
+- validates the identity
+- reads the issuer
+- reads the subject
+- obtains user information
+- finds or creates the local user
+- creates the application session
+- sets the authentication cookie
+- redirects the browser back to Nuxt
+
+
+The browser is then redirected to something such as:
+
+    http://localhost:3001/dashboard
+
+
+Nuxt loads the dashboard.
+
+
+The dashboard requests:
+
+    GET http://localhost:8001/api/user
+
+
+NestJS sees the application session cookie and returns the authenticated user.
+
+
+--------------------------------------------------------------------------------
+9.3 Authenticated requests
+--------------------------------------------------------------------------------
+
+Nuxt sends:
+
+    GET /api/user
+
+
+to:
+
+    http://localhost:8001/api/user
+
+
+The browser sends the NestJS authentication cookie.
+
+
+NestJS authenticates the request.
+
+
+The response contains the application's user representation.
+
+
+Example:
+
+    {
+        "id": 1,
+        "name": "Test User",
+        "email": "test@example.com",
+        "oidc_issuer": "http://localhost:9000/realms/myapp",
+        "oidc_subject": "abc123"
+    }
+
+
+The frontend does not need the Keycloak access token.
+
+
+--------------------------------------------------------------------------------
+9.4 Logout
+--------------------------------------------------------------------------------
+
+Nuxt sends:
+
+    POST http://localhost:8001/api/logout
+
+
+NestJS:
+
+- destroys the local application session
+- clears/invalidate the authentication cookie
+- optionally creates a Keycloak logout URL
+- returns the logout URL to Nuxt
+
+
+Example response:
+
+    {
+        "message": "Logged out successfully",
+        "logout_url": "..."
+    }
+
+
+Nuxt follows the logout URL when provided.
+
+
+Keycloak then terminates the SSO session.
+
+
+The browser eventually returns to:
+
+    http://localhost:3001
+
+
+--------------------------------------------------------------------------------
+9.5 Federated logout
+--------------------------------------------------------------------------------
+
+Logging out of NestJS alone is not necessarily enough.
+
+
+If only the NestJS session is destroyed:
+
+    NestJS session:
+        destroyed
+
+    Keycloak session:
+        active
+
+
+The next login attempt may immediately authenticate the user again.
+
+
+Federated logout terminates both sessions:
+
+    NestJS session:
+        destroyed
+
+    Keycloak session:
+        destroyed
+
+
+The next login attempt should then require authentication again.
+
+
+================================================================================
+10. AUTHENTICATION COMPOSABLE
+================================================================================
+
+The Nuxt authentication composable should communicate with NestJS only.
+
+Example:
 
     interface User {
       id: number
@@ -712,7 +926,10 @@ rules can differ when the hosts are changed.
           const data = await fetcher<User>(
             `${config.public.apiBase}/api/user`,
             {
+              method: 'GET',
+
               credentials: 'include',
+
               headers: {
                 Accept: 'application/json',
               },
@@ -726,7 +943,8 @@ rules can differ when the hosts are changed.
         } catch (e: any) {
           const code =
             e?.status ??
-            e?.statusCode
+            e?.statusCode ??
+            e?.response?.status
 
           if (code === 401) {
             user.value = null
@@ -755,49 +973,14 @@ rules can differ when the hosts are changed.
         }
       }
 
-      async function exchangeCode(
-        code: string
-      ): Promise<boolean> {
-        try {
-          const fetcher = useRequestFetch()
-
-          await fetcher(
-            `${config.public.apiBase}/sso/exchange`,
-            {
-              method: 'POST',
-
-              credentials: 'include',
-
-              headers: {
-                Accept: 'application/json',
-                'Content-Type': 'application/json',
-              },
-
-              body: {
-                code,
-              },
-            }
-          )
-
-          await fetchUser(true)
-
-          return !!user.value
-        } catch {
-          user.value = null
-          return false
-        }
-      }
-
       async function logout(): Promise<void> {
         let logoutUrl: string | null = null
 
         try {
-          const fetcher = useRequestFetch()
-
           const data =
-            await fetcher<{
+            await $fetch<{
               message: string
-              logout_url?: string
+              logout_url?: string | null
             }>(
               `${config.public.apiBase}/api/logout`,
               {
@@ -815,7 +998,7 @@ rules can differ when the hosts are changed.
             data.logout_url ??
             null
         } catch {
-          // Ignore logout API errors.
+          // Ignore logout errors.
         }
 
         user.value = null
@@ -840,7 +1023,6 @@ rules can differ when the hosts are changed.
         error,
         status,
         fetchUser,
-        exchangeCode,
         login,
         logout,
       }
@@ -849,271 +1031,116 @@ rules can differ when the hosts are changed.
 
 IMPORTANT:
 
-The exchangeCode() function is only appropriate if the Laravel backend
-explicitly exposes an endpoint such as:
+There is intentionally NO:
 
-    POST /sso/exchange
+    token
 
-that accepts the authorization code and completes the OIDC exchange.
-
-If Laravel instead performs the complete OIDC authorization-code callback
-itself at:
-
-    GET /sso/callback
-
-and then redirects directly to Nuxt, the Nuxt callback page should NOT call
-exchangeCode().
-
-In that architecture the browser flow is:
-
-    Nuxt
-      |
-      v
-    Laravel /sso/redirect
-      |
-      v
-    Keycloak
-      |
-      v
-    Laravel /sso/callback
-      |
-      v
-    Nuxt /dashboard
+state.
 
 
-There is no authorization code for Nuxt to exchange.
+There is intentionally NO:
 
-This distinction must match the actual Laravel OidcController implementation.
+    auth_token
+
+browser cookie.
 
 
---------------------------------------------------------------------------------
-8.4 app/middleware/auth.ts
---------------------------------------------------------------------------------
+There is intentionally NO:
 
-    export default defineNuxtRouteMiddleware(async () => {
-      const {
-        user,
-        fetchUser,
-      } = useAuth()
+    exchangeCode()
 
-      await fetchUser(true)
 
-      if (!user.value) {
-        return navigateTo('/login')
+function.
+
+
+The authorization code is handled by NestJS.
+
+
+The frontend only needs the NestJS application session.
+
+
+================================================================================
+11. AUTHENTICATION MIDDLEWARE
+================================================================================
+
+Create:
+
+    app/middleware/auth.ts
+
+
+Example:
+
+    export default defineNuxtRouteMiddleware(
+      async () => {
+        const {
+          user,
+          fetchUser,
+        } = useAuth()
+
+        await fetchUser(true)
+
+        if (!user.value) {
+          return navigateTo('/login')
+        }
       }
+    )
+
+
+This middleware protects authenticated pages.
+
+
+For example:
+
+    dashboard.vue
+
+
+can use:
+
+    definePageMeta({
+      middleware: 'auth',
     })
 
 
 --------------------------------------------------------------------------------
-8.5 app/middleware/guest.ts
+Guest middleware
 --------------------------------------------------------------------------------
 
-    export default defineNuxtRouteMiddleware(async () => {
-      const {
-        user,
-        fetchUser,
-      } = useAuth()
+Create:
 
-      await fetchUser(true)
+    app/middleware/guest.ts
 
-      if (user.value) {
-        return navigateTo(
-          '/dashboard',
-          {
-            replace: true,
-          }
-        )
+
+Example:
+
+    export default defineNuxtRouteMiddleware(
+      async () => {
+        const {
+          user,
+          fetchUser,
+        } = useAuth()
+
+        await fetchUser(true)
+
+        if (user.value) {
+          return navigateTo(
+            '/dashboard',
+            {
+              replace: true,
+            }
+          )
+        }
       }
-    })
+    )
 
 
---------------------------------------------------------------------------------
-8.6 app/layouts/default.vue
---------------------------------------------------------------------------------
-
-    <script setup lang="ts">
-    const {
-      user,
-      logout,
-    } = useAuth()
-    </script>
-
-    <template>
-      <div class="d-flex flex-column min-vh-100">
-
-        <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-          <div class="container">
-
-            <NuxtLink
-              class="navbar-brand"
-              to="/"
-            >
-              Bakery SSO
-            </NuxtLink>
-
-            <div class="navbar-nav ms-auto">
-
-              <template v-if="user">
-
-                <NuxtLink
-                  class="nav-link"
-                  to="/dashboard"
-                >
-                  Dashboard
-                </NuxtLink>
-
-                <span class="nav-link disabled">
-                  {{ user.name }}
-                </span>
-
-                <button
-                  class="btn btn-link nav-link"
-                  @click="logout"
-                >
-                  Logout
-                </button>
-
-              </template>
-
-              <template v-else>
-
-                <NuxtLink
-                  class="nav-link"
-                  to="/login"
-                >
-                  Login
-                </NuxtLink>
-
-              </template>
-
-            </div>
-          </div>
-        </nav>
-
-        <main class="py-4 flex-grow-1">
-          <slot />
-        </main>
-
-        <footer
-          class="bg-light py-3 mt-auto text-center text-muted"
-        >
-          <small>
-            SSO Demo — Nuxt 4 + Laravel 12 + Keycloak
-          </small>
-        </footer>
-
-      </div>
-    </template>
+This prevents authenticated users from returning to the login page.
 
 
---------------------------------------------------------------------------------
-8.7 app/pages/index.vue
---------------------------------------------------------------------------------
+================================================================================
+12. LOGIN PAGE
+================================================================================
 
-    <script setup lang="ts">
-    const {
-      user,
-      status,
-      error,
-      fetchUser,
-    } = useAuth()
-
-    if (import.meta.client) {
-      await fetchUser()
-    }
-    </script>
-
-    <template>
-      <div class="container">
-
-        <div class="text-center py-5">
-
-          <h1 class="display-4 mb-3">
-            Bakery SSO
-          </h1>
-
-          <p class="lead mb-4">
-            Single Sign-On with Nuxt 4 +
-            Laravel 12 + Keycloak
-          </p>
-
-          <div
-            v-if="
-              status === 'loading' ||
-              status === 'idle'
-            "
-            class="py-3"
-          >
-            <div
-              class="spinner-border text-primary"
-              role="status"
-            >
-              <span class="visually-hidden">
-                Checking sign-in status...
-              </span>
-            </div>
-
-            <p class="text-muted mt-2">
-              Checking sign-in status...
-            </p>
-          </div>
-
-          <div
-            v-else-if="status === 'error'"
-            class="py-3"
-          >
-            <p class="text-danger">
-              {{
-                error ??
-                'Could not check your sign-in status.'
-              }}
-            </p>
-
-            <button
-              class="btn btn-outline-primary"
-              @click="fetchUser(true)"
-            >
-              Retry
-            </button>
-          </div>
-
-          <div
-            v-else-if="
-              status === 'authenticated' &&
-              user
-            "
-          >
-            <p class="fs-5">
-              Welcome back,
-              <strong>{{ user.name }}</strong>
-            </p>
-
-            <NuxtLink
-              to="/dashboard"
-              class="btn btn-primary btn-lg"
-            >
-              Go to Dashboard
-            </NuxtLink>
-          </div>
-
-          <div v-else>
-            <NuxtLink
-              to="/login"
-              class="btn btn-primary btn-lg"
-            >
-              Sign In
-            </NuxtLink>
-          </div>
-
-        </div>
-
-      </div>
-    </template>
-
-
---------------------------------------------------------------------------------
-8.8 app/pages/login.vue
---------------------------------------------------------------------------------
+Example:
 
     <script setup lang="ts">
     definePageMeta({
@@ -1165,162 +1192,96 @@ This distinction must match the actual Laravel OidcController implementation.
     </template>
 
 
---------------------------------------------------------------------------------
-8.9 app/pages/callback.vue
---------------------------------------------------------------------------------
+When the button is clicked:
 
-IMPORTANT:
-
-Whether this page should exchange the code depends entirely on the Laravel
-OidcController architecture.
-
-If Laravel owns the OIDC callback, this page should NOT exchange the code.
-
-The preferred BFF flow is:
-
-    Browser
-      |
-      v
-    Laravel /sso/redirect
-      |
-      v
-    Keycloak
-      |
-      v
-    Laravel /sso/callback
-      |
-      | Laravel creates session
-      v
-    Nuxt /dashboard
+    login()
 
 
-In that case, callback.vue can simply exist as a fallback/loading page, or
-it may not be needed at all.
+redirects the browser to:
 
-If Laravel intentionally redirects the authorization code to Nuxt and has
-an endpoint such as POST /sso/exchange, then callback.vue can perform the
-exchange.
+    http://localhost:8001/sso/redirect
 
-For the exchange-based architecture:
 
-    <script setup lang="ts">
+It does NOT redirect directly to Keycloak.
+
+
+================================================================================
+13. CALLBACK PAGE
+================================================================================
+
+For the current architecture, Nuxt does not need to handle the Keycloak
+authorization callback.
+
+
+The callback belongs to NestJS:
+
+    http://localhost:8001/sso/callback
+
+
+Therefore the frontend should NOT do this:
+
     const route = useRoute()
-
-    const {
-      exchangeCode,
-    } = useAuth()
-
-    const rawCode = route.query.code
-
-    const code =
-      typeof rawCode === 'string'
-        ? rawCode
-        : null
-
-    if (!code) {
-      await navigateTo(
-        '/login?error=missing_auth_code',
-        {
-          replace: true,
-        }
-      )
-
-      throw new Error(
-        'Missing authentication code.'
-      )
-    }
-
-    const success =
-      await exchangeCode(code)
-
-    if (!success) {
-      await navigateTo(
-        '/login?error=auth_exchange_failed',
-        {
-          replace: true,
-        }
-      )
-
-      throw new Error(
-        'Authentication code exchange failed.'
-      )
-    }
-
-    await navigateTo(
-      '/dashboard',
-      {
-        replace: true,
-      }
-    )
-    </script>
-
-    <template>
-      <div class="container py-5">
-
-        <div class="text-center">
-
-          <div
-            class="spinner-border text-primary"
-            role="status"
-          >
-            <span class="visually-hidden">
-              Completing sign in...
-            </span>
-          </div>
-
-          <p class="text-muted mt-3">
-            Completing your sign in...
-          </p>
-
-        </div>
-
-      </div>
-    </template>
-
-
-IMPORTANT FIX:
-
-Do not write:
 
     const code = route.query.code
 
     await exchangeCode(code)
 
-because Nuxt's route query type is:
 
-    LocationQueryValue
-    |
-    LocationQueryValue[]
-    |
-    undefined
+The frontend should NOT implement an endpoint such as:
 
-and therefore TypeScript correctly refuses to pass it directly to a
-function requiring:
-
-    string
+    POST /api/oauth/exchange
 
 
-Instead, normalize the value first:
-
-    const rawCode = route.query.code
-
-    const code =
-      typeof rawCode === 'string'
-        ? rawCode
-        : null
-
-Then verify:
-
-    if (!code) {
-      ...
-    }
-
-Only after that check is TypeScript able to treat code as string.
+unless the architecture is intentionally changed.
 
 
---------------------------------------------------------------------------------
-8.10 app/pages/dashboard.vue
---------------------------------------------------------------------------------
+The preferred flow is:
+
+    Nuxt
+       |
+       v
+    NestJS /sso/redirect
+       |
+       v
+    Keycloak
+       |
+       v
+    NestJS /sso/callback
+       |
+       v
+    NestJS session
+       |
+       v
+    Nuxt /dashboard
+
+
+There is no Nuxt authorization-code exchange.
+
+
+This also means that a Nuxt URL such as:
+
+    http://localhost:3001/sso/callback?code=...
+
+
+is incorrect for the current BFF architecture.
+
+
+The browser must instead reach:
+
+    http://localhost:8001/sso/callback?code=...
+
+
+and NestJS must process it.
+
+
+After NestJS completes authentication, it redirects to Nuxt.
+
+
+================================================================================
+14. DASHBOARD
+================================================================================
+
+Example:
 
     <script setup lang="ts">
     definePageMeta({
@@ -1508,108 +1469,84 @@ Only after that check is TypeScript able to treat code as string.
 
 
 ================================================================================
-9. AUTHENTICATION FLOW
+15. NESTJS API ENDPOINTS
 ================================================================================
 
-9.1 User opens the application
-
-    Browser
-       |
-       v
-    http://localhost:3000
+The Nuxt application expects NestJS to expose the following endpoints.
 
 
-Nuxt checks:
+--------------------------------------------------------------------------------
+15.1 Login redirect
+--------------------------------------------------------------------------------
 
-    GET http://localhost:8000/api/user
-
-
-If the Laravel session exists:
-
-    HTTP 200
-
-    {
-        "id": 1,
-        "name": "Test User",
-        "email": "test@example.com",
-        "oidc_issuer": "...",
-        "oidc_subject": "..."
-    }
+    GET /sso/redirect
 
 
-If there is no Laravel session:
+Full local URL:
+
+    http://localhost:8001/sso/redirect
+
+
+Purpose:
+
+    Starts the Keycloak OIDC login flow.
+
+
+The browser should navigate here when the user clicks Sign In.
+
+
+--------------------------------------------------------------------------------
+15.2 OIDC callback
+--------------------------------------------------------------------------------
+
+    GET /sso/callback
+
+
+Full local URL:
+
+    http://localhost:8001/sso/callback
+
+
+Purpose:
+
+    Receives the authorization response from Keycloak.
+
+
+NestJS is responsible for:
+
+- validating the authorization response
+- exchanging the authorization code
+- validating the identity
+- creating/updating the local user
+- establishing the application session
+- redirecting the browser to Nuxt
+
+
+--------------------------------------------------------------------------------
+15.3 Current user
+--------------------------------------------------------------------------------
+
+    GET /api/user
+
+
+Full local URL:
+
+    http://localhost:8001/api/user
+
+
+Purpose:
+
+    Returns the authenticated application user.
+
+
+Unauthenticated response:
 
     HTTP 401
 
 
-The SPA then considers the user unauthenticated.
+Authenticated response:
 
-
---------------------------------------------------------------------------------
-9.2 Login
-
-User clicks:
-
-    Sign In
-
-
-Nuxt redirects to:
-
-    http://localhost:8000/sso/redirect
-
-
-Laravel starts the OIDC authorization flow.
-
-
-Laravel redirects the browser to Keycloak.
-
-
-Keycloak displays its login page if the user does not already have a
-Keycloak SSO session.
-
-
-After successful authentication, Keycloak redirects to Laravel's callback:
-
-    http://localhost:8000/sso/callback
-
-
-Laravel:
-
-- validates the OIDC response
-- exchanges the authorization code
-- validates the identity
-- extracts the issuer
-- extracts the subject
-- extracts user information
-- finds or creates the local User
-- creates the Laravel authenticated session
-- redirects the browser back to Nuxt
-
-
-The browser then has a Laravel session cookie.
-
-
-Nuxt can now call:
-
-    GET /api/user
-
-
-Laravel returns the authenticated local user.
-
-
---------------------------------------------------------------------------------
-9.3 Authenticated requests
-
-Nuxt sends:
-
-    GET /api/user
-
-with the Laravel session cookie.
-
-
-Laravel authenticates the request.
-
-The response contains only the application's user representation.
+    HTTP 200
 
 
 Example:
@@ -1623,69 +1560,187 @@ Example:
     }
 
 
-The SPA does not receive the Keycloak tokens.
-
-
 --------------------------------------------------------------------------------
-9.4 Logout
-
-Nuxt sends:
+15.4 Logout
+--------------------------------------------------------------------------------
 
     POST /api/logout
 
 
-Laravel:
+Full local URL:
 
-- logs out the local authenticated session
-- invalidates the session
-- optionally creates a federated Keycloak logout URL
-- returns the logout URL to Nuxt
+    http://localhost:8001/api/logout
 
 
-Nuxt follows the URL if one was returned.
+Purpose:
+
+    Logs the user out of the NestJS application session.
 
 
-Keycloak then terminates the SSO session.
+NestJS may return:
+
+    {
+        "message": "Logged out successfully",
+        "logout_url": "..."
+    }
 
 
-The browser eventually returns to the SPA.
+Nuxt follows logout_url when it is available.
+
+
+================================================================================
+16. COOKIE AND CORS CONFIGURATION
+================================================================================
+
+Because Nuxt and NestJS run on different ports, they have different origins.
+
+Nuxt:
+
+    http://localhost:3001
+
+
+NestJS:
+
+    http://localhost:8001
+
+
+Therefore credentialed browser requests must be configured correctly.
+
+
+NestJS should allow:
+
+    http://localhost:3001
+
+
+and credentials should be enabled.
+
+
+Conceptually:
+
+    app.enableCors({
+      origin: 'http://localhost:3001',
+      credentials: true,
+    })
+
+
+Do NOT use:
+
+    origin: '*'
+
+
+when authentication cookies are involved.
+
+
+Nuxt API requests should include:
+
+    credentials: 'include'
+
+
+Example:
+
+    await $fetch(
+      'http://localhost:8001/api/user',
+      {
+        credentials: 'include',
+      }
+    )
+
+
+For SSR requests, use:
+
+    useRequestFetch()
+
+
+so that relevant request headers/cookies can be forwarded appropriately.
 
 
 --------------------------------------------------------------------------------
-9.5 Why federated logout matters
+COOKIE
+--------------------------------------------------------------------------------
 
-If only the Laravel session is destroyed:
+The authentication cookie should be controlled by NestJS.
 
-    Laravel session:
-        destroyed
-
-    Keycloak session:
-        still active
+The frontend should not need to create an authentication token cookie.
 
 
-The next login attempt can immediately authenticate the user again without
-asking for a password.
+Do not create:
+
+    auth_token
 
 
-With federated logout:
-
-    Laravel session:
-        destroyed
-
-    Keycloak session:
-        destroyed
+in Nuxt if the architecture uses the NestJS session cookie.
 
 
-The next login attempt requires authentication again.
+Do not store Keycloak tokens in browser-accessible cookies.
+
+
+The authentication cookie should ideally be:
+
+    HttpOnly
+
+
+and in production:
+
+    Secure
+
+
+The appropriate SameSite policy should be selected based on the actual
+deployment architecture.
+
+
+--------------------------------------------------------------------------------
+HOST CONSISTENCY
+--------------------------------------------------------------------------------
+
+Use:
+
+    localhost
+
+
+consistently.
+
+
+Do not mix:
+
+    localhost
+
+
+with:
+
+    127.0.0.1
+
+
+during the same authentication flow.
+
+
+For example, avoid:
+
+    Nuxt:
+        http://localhost:3001
+
+    NestJS:
+        http://127.0.0.1:8001
+
+
+Use:
+
+    Nuxt:
+        http://localhost:3001
+
+    NestJS:
+        http://localhost:8001
+
+
+This makes browser cookie and CORS behavior easier to reason about.
 
 
 ================================================================================
-10. TESTING THE SPA
+17. TESTING THE AUTHENTICATION FLOW
 ================================================================================
 
-10.1 Start all services
+17.1 Start Keycloak
 
-Terminal 1:
+Example:
 
     cd ~/keycloak/keycloak-26.x.x
 
@@ -1694,305 +1749,460 @@ Terminal 1:
     bin/kc.sh start-dev --http-port=9000
 
 
-Terminal 2:
+Keycloak:
 
-    cd bakery-api
-
-    php artisan serve
-
-
-Terminal 3:
-
-    cd bakery-spa
-
-    npm run dev
-
-
-Services:
-
-    Keycloak:
-        http://localhost:9000
-
-    Laravel:
-        http://localhost:8000
-
-    Nuxt:
-        http://localhost:3000
+    http://localhost:9000
 
 
 --------------------------------------------------------------------------------
-10.2 Full login flow
+17.2 Start NestJS
+--------------------------------------------------------------------------------
 
-1. Open a fresh incognito window.
+From the NestJS project:
+
+    npm run start:dev
+
+
+NestJS:
+
+    http://localhost:8001
+
+
+Expected routes should include:
+
+    GET /sso/redirect
+
+    GET /sso/callback
+
+    GET /api/user
+
+    POST /api/logout
+
+
+--------------------------------------------------------------------------------
+17.3 Start Nuxt
+--------------------------------------------------------------------------------
+
+From the Nuxt project:
+
+    npm run dev -- --port 3001
+
+
+Nuxt:
+
+    http://localhost:3001
+
+
+--------------------------------------------------------------------------------
+17.4 Test login
+--------------------------------------------------------------------------------
+
+1. Open a fresh/incognito browser window.
 
 2. Visit:
 
-       http://localhost:3000
+       http://localhost:3001
 
 3. Click:
 
        Sign In
 
-4. Nuxt sends the browser to:
+4. Nuxt redirects to:
 
-       http://localhost:8000/sso/redirect
+       http://localhost:8001/sso/redirect
 
-5. Laravel redirects to Keycloak.
+5. NestJS redirects to Keycloak.
 
-6. Enter the Keycloak test credentials.
+6. Keycloak displays the login page.
 
-7. Keycloak redirects to Laravel.
+7. Enter the Keycloak credentials.
 
-8. Laravel establishes the application session.
+8. Keycloak redirects to:
 
-9. Laravel redirects to Nuxt.
+       http://localhost:8001/sso/callback
 
-10. Nuxt loads the dashboard.
+9. NestJS processes the authorization code.
 
-11. The dashboard calls:
+10. NestJS creates the application session.
 
-       GET /api/user
+11. NestJS redirects the browser to Nuxt.
 
-12. Laravel returns the authenticated user.
+12. Nuxt loads:
 
-13. The dashboard displays the user information.
+       /dashboard
 
-14. The navbar shows:
+13. Nuxt calls:
 
-       Dashboard
-       User Name
-       Logout
+       GET http://localhost:8001/api/user
 
+14. NestJS returns the authenticated user.
 
---------------------------------------------------------------------------------
-10.3 SSO session reuse
-
-1. Log in successfully.
-
-2. Open a new tab in the same browser session.
-
-3. Visit:
-
-       http://localhost:3000/dashboard
-
-4. The Laravel session should still authenticate the user.
-
-5. No Keycloak password prompt should appear.
+15. Dashboard displays the user.
 
 
 --------------------------------------------------------------------------------
-10.4 Federated logout
+17.5 Test authenticated refresh
+--------------------------------------------------------------------------------
+
+After successful login:
+
+    http://localhost:3001/dashboard
+
+
+Refresh the page.
+
+
+Nuxt should continue to recognize the authenticated user.
+
+
+The browser should send the NestJS session cookie.
+
+
+Nuxt should request:
+
+    GET http://localhost:8001/api/user
+
+
+NestJS should return HTTP 200.
+
+
+--------------------------------------------------------------------------------
+17.6 Test logout
+--------------------------------------------------------------------------------
 
 1. Click Logout.
 
-2. Laravel destroys the local session.
+2. Nuxt sends:
 
-3. Laravel returns a Keycloak logout URL.
+       POST http://localhost:8001/api/logout
 
-4. Nuxt redirects to that URL.
+3. NestJS destroys the application session.
 
-5. Keycloak terminates its SSO session.
+4. NestJS optionally returns a Keycloak logout URL.
 
-6. The browser returns to the application.
+5. Nuxt follows the URL.
 
-7. The application displays Sign In.
+6. Keycloak terminates the SSO session.
 
-8. Click Sign In again.
+7. Browser returns to:
 
-9. Keycloak should now require authentication again.
+       http://localhost:3001
 
-
-This is the definitive test that federated logout is functioning.
+8. The application should display the Sign In state.
 
 
 --------------------------------------------------------------------------------
-10.5 Server-side rendering with cookies
+17.7 Test login after federated logout
+--------------------------------------------------------------------------------
 
-After logging in:
+After logging out:
 
-1. Open:
+1. Click Sign In again.
 
-       http://localhost:3000/dashboard
+2. NestJS starts the OIDC flow.
 
-2. Refresh the page.
-
-3. Nuxt SSR makes the /api/user request.
-
-4. useRequestFetch() forwards the relevant request cookies.
-
-5. Laravel recognizes the session.
-
-6. Laravel returns HTTP 200.
-
-7. Nuxt renders the authenticated dashboard.
+3. Keycloak should require authentication again if the federated logout
+   successfully terminated the Keycloak SSO session.
 
 
 ================================================================================
-11. COMMON ERRORS AND FIXES
+18. COMMON ERRORS AND FIXES
 ================================================================================
 
 
 --------------------------------------------------------------------------------
-11.1 /api/user returns 401 despite a valid Laravel session
+18.1 "Page not found: /sso/callback" in Nuxt
 --------------------------------------------------------------------------------
 
-Possible causes:
+If the browser shows something like:
 
-- Sanctum stateful middleware is missing
-- The session cookie is not being sent
-- CORS is incorrect
-- The frontend and backend use different hosts
-- The session domain is incorrect
-- The browser rejected the cookie
-- SSR did not forward the cookie
+    Page not found:
+    /sso/callback?state=...&code=...
 
 
-Laravel should use stateful API authentication.
+and the error is generated by Nuxt/H3, then the browser has been sent to:
 
-In Laravel 12, ensure the application bootstrap configuration enables
-stateful API middleware as appropriate for the SPA architecture.
+    http://localhost:3001/sso/callback
 
 
-Nuxt requests should include:
+That is incorrect for this architecture.
+
+
+The callback belongs to NestJS:
+
+    http://localhost:8001/sso/callback
+
+
+Check the Keycloak redirect URI.
+
+
+It should be:
+
+    http://localhost:8001/sso/callback
+
+
+NOT:
+
+    http://localhost:3001/sso/callback
+
+
+Also check the NestJS OIDC configuration.
+
+
+The Keycloak client must use the NestJS callback URL.
+
+
+--------------------------------------------------------------------------------
+18.2 Keycloak redirects to Nuxt after login
+--------------------------------------------------------------------------------
+
+If the browser goes directly from Keycloak to:
+
+    http://localhost:3001/sso/callback
+
+
+then Keycloak is configured with the wrong redirect URI for this architecture.
+
+
+The callback must be:
+
+    http://localhost:8001/sso/callback
+
+
+Nuxt should only receive the final application redirect after NestJS has
+completed authentication.
+
+
+--------------------------------------------------------------------------------
+18.3 Login sends me back to the login page
+--------------------------------------------------------------------------------
+
+Typical flow:
+
+    Nuxt /login
+       |
+       v
+    NestJS /sso/redirect
+       |
+       v
+    Keycloak
+       |
+       v
+    NestJS /sso/callback
+       |
+       v
+    Nuxt /login
+
+
+If this happens, the most likely issue is that the NestJS session cookie is
+not being created or is not being sent back to NestJS.
+
+
+Check:
+
+- NestJS session middleware
+- Cookie configuration
+- CORS
+- credentials
+- frontend origin
+- backend origin
+- localhost vs 127.0.0.1
+- SameSite configuration
+- Secure configuration
+- browser cookie storage
+- session secret
+- callback redirect
+
+
+The browser developer tools should be inspected under:
+
+    Application
+       ->
+    Cookies
+
+
+Look for the NestJS session cookie.
+
+
+--------------------------------------------------------------------------------
+18.4 /api/user returns 401
+--------------------------------------------------------------------------------
+
+If:
+
+    GET http://localhost:8001/api/user
+
+
+returns:
+
+    401 Unauthorized
+
+
+then NestJS does not recognize the current application session.
+
+
+Check whether the browser is sending the session cookie.
+
+
+Nuxt requests should use:
 
     credentials: 'include'
 
 
-SSR requests should use:
+Example:
+
+    await $fetch(
+      `${config.public.apiBase}/api/user`,
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+        },
+      }
+    )
+
+
+For SSR:
 
     useRequestFetch()
 
 
-The frontend and backend should use consistent hosts:
-
-    localhost
-
-rather than mixing:
-
-    localhost
-
-and:
-
-    127.0.0.1
+should be used where appropriate.
 
 
 --------------------------------------------------------------------------------
-11.2 Session cookie missing from the browser
+18.5 CORS error
 --------------------------------------------------------------------------------
 
-Possible cause:
-
-    SESSION_DOMAIN
-
-does not match the development host.
+NestJS must explicitly allow the Nuxt origin.
 
 
-For local development, keep the Laravel and Nuxt origins consistent.
+Nuxt:
+
+    http://localhost:3001
 
 
-Example Laravel .env:
+NestJS:
 
-    APP_URL=http://localhost:8000
-
-    FRONTEND_URL=http://localhost:3000
-
-    SESSION_DOMAIN=localhost
+    http://localhost:8001
 
 
-After changing configuration:
+NestJS should conceptually use:
 
-    php artisan config:clear
-
-
-Then restart the Laravel server.
-
-
---------------------------------------------------------------------------------
-11.3 CORS error
---------------------------------------------------------------------------------
-
-Do not use:
-
-    *
-
-for credentialed browser requests.
+    app.enableCors({
+      origin: 'http://localhost:3001',
+      credentials: true,
+    })
 
 
-The Laravel CORS configuration should explicitly allow:
+Do NOT use:
 
-    http://localhost:3000
-
-
-Credentials must be allowed when the frontend sends cookies.
+    origin: '*'
 
 
-The effective policy should conceptually be:
-
-    allowed origin:
-        http://localhost:3000
-
-    supports credentials:
-        true
+for credentialed authentication requests.
 
 
 --------------------------------------------------------------------------------
-11.4 CSRF 419 on POST /api/logout
---------------------------------------------------------------------------------
-
-If the Laravel API route is stateful and protected by CSRF middleware,
-a cross-origin POST may require the appropriate CSRF setup.
-
-
-For an architecture where the API logout route is intentionally excluded
-from CSRF validation, configure Laravel accordingly.
-
-For example, depending on the application's security design:
-
-    $middleware->validateCsrfTokens(
-        except: [
-            'api/*',
-        ]
-    );
-
-
-Do not blindly disable CSRF protection for arbitrary application routes.
-
-Only exclude endpoints when the authentication architecture has been
-designed to make that safe.
-
-
---------------------------------------------------------------------------------
-11.5 Login button does nothing
+18.6 Cookie is not being sent
 --------------------------------------------------------------------------------
 
 Check:
 
+    credentials: 'include'
+
+
+on browser requests.
+
+
+Also check:
+
+    SameSite
+
+
+and:
+
+    Secure
+
+
+cookie settings.
+
+
+For local HTTP development, a cookie configured as:
+
+    Secure=true
+
+
+may not work correctly because the application is using HTTP rather than
+HTTPS.
+
+
+For local development, use a non-Secure cookie when appropriate.
+
+
+For production, HTTPS and Secure cookies should be used.
+
+
+--------------------------------------------------------------------------------
+18.7 Nuxt is running on 3001 but configuration says 3000
+--------------------------------------------------------------------------------
+
+Make sure all configuration uses:
+
+    http://localhost:3001
+
+
+not:
+
+    http://localhost:3000
+
+
+Important values:
+
+    apiBase:
+        http://localhost:8001
+
+
+    loginUrl:
+        http://localhost:8001/sso/redirect
+
+
+    frontend URL:
+        http://localhost:3001
+
+
+    Keycloak callback:
+        http://localhost:8001/sso/callback
+
+
+--------------------------------------------------------------------------------
+18.8 NestJS is running on 8001 but Nuxt calls 8000
+--------------------------------------------------------------------------------
+
+Update:
+
+    runtimeConfig.public.apiBase
+
+
+to:
+
+    http://localhost:8001
+
+
+and:
+
     runtimeConfig.public.loginUrl
 
 
-It should resolve to:
+to:
 
-    http://localhost:8000/sso/redirect
-
-
-If it is undefined, verify:
-
-    nuxt.config.ts
+    http://localhost:8001/sso/redirect
 
 
-contains:
-
-    runtimeConfig: {
-      public: {
-        apiBase: 'http://localhost:8000',
-        loginUrl: 'http://localhost:8000/sso/redirect',
-      },
-    }
-
-
-If Nuxt appears to use stale configuration:
+Delete stale Nuxt build output if necessary:
 
     rm -rf .nuxt
+
 
 Then restart:
 
@@ -2000,178 +2210,95 @@ Then restart:
 
 
 --------------------------------------------------------------------------------
-11.6 Login immediately authenticates without showing Keycloak login
+18.9 "fetch failed ECONNREFUSED ::1:9000"
 --------------------------------------------------------------------------------
 
-This is usually expected when the Keycloak SSO session is still active.
+If NestJS displays:
+
+    ECONNREFUSED ::1:9000
+
+or:
+
+    ECONNREFUSED 127.0.0.1:9000
 
 
-If Laravel logs out but Keycloak remains logged in:
-
-    Laravel session:
-        destroyed
-
-    Keycloak session:
-        active
+then NestJS attempted to communicate with Keycloak, but Keycloak was not
+running or was not listening on port 9000.
 
 
-Keycloak can authenticate the user again automatically.
+Start Keycloak:
+
+    bin/kc.sh start-dev --http-port=9000
 
 
-Use federated logout to terminate both sessions.
+Then verify:
 
-
---------------------------------------------------------------------------------
-11.7 Keycloak shows "Invalid redirect URI"
---------------------------------------------------------------------------------
-
-The redirect URI registered in Keycloak must match the URI Laravel uses.
-
-
-The callback belongs to Laravel, not Nuxt.
-
-
-Example:
-
-    http://localhost:8000/sso/callback
-
-
-Do not register a Nuxt callback unless the architecture intentionally sends
-the authorization code to Nuxt.
+    http://localhost:9000
 
 
 --------------------------------------------------------------------------------
-11.8 Keycloak shows "Invalid post logout redirect URI"
+18.10 Nuxt callback.vue tries to exchange the code
 --------------------------------------------------------------------------------
 
-The post-logout redirect URI sent by Laravel must exactly match a URI
-registered in Keycloak.
+Do not do this in the current architecture:
 
-
-Example:
-
-    http://localhost:3000
-
-
-Be careful about:
-
-    http://localhost:3000
-
-versus:
-
-    http://localhost:3000/
-
-
-Use the exact URI configured by Laravel.
-
-
---------------------------------------------------------------------------------
-11.9 TypeScript error in callback.vue
---------------------------------------------------------------------------------
-
-Error:
-
-    Argument of type
-    'LocationQueryValue$1 | LocationQueryValue$1[] | undefined'
-    is not assignable to parameter of type 'string'.
-
-
-Cause:
-
-    route.query.code
-
-is not guaranteed to be a string.
-
-
-Use:
-
-    const rawCode = route.query.code
-
-    const code =
-      typeof rawCode === 'string'
-        ? rawCode
-        : null
-
-
-Then:
-
-    if (!code) {
-      await navigateTo(
-        '/login?error=missing_auth_code',
-        {
-          replace: true,
-        }
-      )
-
-      throw new Error(
-        'Missing authentication code.'
-      )
-    }
-
-
-Now:
+    const code = route.query.code
 
     await exchangeCode(code)
 
 
-is type-safe.
-
-
---------------------------------------------------------------------------------
-11.10 callback.vue should not exchange the code
---------------------------------------------------------------------------------
-
-This is important.
-
-If Laravel's OidcController already owns:
-
-    /sso/redirect
-
-and:
+NestJS already owns:
 
     /sso/callback
 
 
-then Nuxt should generally NOT receive or exchange the authorization code.
+Therefore the authorization code is already processed by NestJS.
 
 
-The correct BFF flow is:
-
-    Nuxt
-      |
-      v
-    Laravel /sso/redirect
-      |
-      v
-    Keycloak
-      |
-      v
-    Laravel /sso/callback
-      |
-      v
-    Laravel session
-      |
-      v
-    Nuxt /dashboard
+The Nuxt application should not receive the authorization code.
 
 
-If your current Laravel controller follows this architecture, remove the
-Nuxt-side exchangeCode flow and let Laravel finish authentication before
-redirecting back to Nuxt.
+Remove the frontend exchange flow unless the backend has deliberately been
+designed around a split authorization-code exchange architecture.
 
 
-Only use:
+--------------------------------------------------------------------------------
+18.11 Authentication works but user is not returned
+--------------------------------------------------------------------------------
 
-    callback.vue
-    exchangeCode()
+Check:
 
-if your Laravel controller deliberately implements a split flow where
-Nuxt receives the authorization code and sends it back to Laravel through
-an exchange endpoint.
+    GET /api/user
+
+
+and verify that NestJS returns:
+
+    HTTP 200
+
+
+with the expected user object.
+
+
+Example:
+
+    {
+        "id": 1,
+        "name": "Test User",
+        "email": "test@example.com",
+        "oidc_issuer": "http://localhost:9000/realms/myapp",
+        "oidc_subject": "abc123"
+    }
+
+
+If NestJS returns 401, debug the NestJS session first.
+
+
+The Nuxt application should not attempt to reconstruct authentication from
+Keycloak tokens.
 
 
 ================================================================================
-12. PRODUCTION MIGRATION CHECKLIST
+19. PRODUCTION MIGRATION CHECKLIST
 ================================================================================
 
 Production should use HTTPS everywhere.
@@ -2182,86 +2309,85 @@ Example:
     Nuxt:
         https://app.company.com
 
-    Laravel:
+    NestJS:
         https://api.company.com
 
     Keycloak:
         https://sso.company.com
 
 
-Runtime configuration:
+Production runtime configuration:
 
     NUXT_PUBLIC_API_BASE=https://api.company.com
 
     NUXT_PUBLIC_LOGIN_URL=https://api.company.com/sso/redirect
 
 
-Production considerations:
+Keycloak redirect URI:
+
+    https://api.company.com/sso/callback
+
+
+Post logout redirect URI:
+
+    https://app.company.com
+
+
+Production requirements:
 
 - Use HTTPS
 - Enable Secure cookies
 - Keep authentication cookies HttpOnly
-- Configure SameSite appropriately
+- Configure SameSite correctly
 - Configure CORS explicitly
-- Do not use wildcard origins with credentials
-- Register the correct Laravel OIDC redirect URI in Keycloak
-- Register the correct post-logout redirect URI in Keycloak
-- Use production Keycloak issuer URLs
-- Keep the Keycloak client secret exclusively on Laravel
+- Never use wildcard CORS with credentials
+- Register the NestJS OIDC callback in Keycloak
+- Register the production post-logout redirect URI
+- Keep Keycloak client secrets exclusively on NestJS
 - Never expose client secrets through Nuxt runtimeConfig.public
-- Never put OIDC tokens into browser storage
-- Never send access tokens to the Nuxt application
-- Keep Laravel responsible for authorization decisions
-- Keep Laravel responsible for authentication decisions
+- Never expose OIDC tokens to Nuxt
+- Never store OIDC tokens in browser storage
+- Keep authentication decisions on NestJS
+- Keep authorization decisions on NestJS
+- Use a strong session secret
+- Use a production-grade session store
+- Use HTTPS between all components
+- Configure secure proxy behavior when running behind a reverse proxy
 
 
-Production values:
+Production architecture:
 
-    Local
-    --------------------------------------------------
-    Nuxt:
-        http://localhost:3000
-
-    Laravel:
-        http://localhost:8000
-
-    Keycloak:
-        http://localhost:9000
-
-
-    Production
-    --------------------------------------------------
-    Nuxt:
-        https://app.company.com
-
-    Laravel:
-        https://api.company.com
-
-    Keycloak:
-        https://sso.company.com
+    Browser
+       |
+       v
+    https://app.company.com
+       |
+       v
+    https://api.company.com
+       |
+       v
+    https://sso.company.com
 
 
-What should remain unchanged conceptually:
-
-- useAuth()
-- Laravel BFF architecture
-- Session-based authentication
-- /api/user
-- /api/logout
-- Laravel-owned OIDC flow
-- No tokens in the browser
+The conceptual architecture remains unchanged.
 
 
 ================================================================================
-13. SECURITY NOTES
+20. SECURITY NOTES
 ================================================================================
 
 
-Rule 1 — The SPA is not a trust boundary
+--------------------------------------------------------------------------------
+Rule 1 — The frontend is not a trust boundary
+--------------------------------------------------------------------------------
 
-Anything displayed or stored in the SPA is client-side state.
+Anything stored or displayed by Nuxt is client-side state.
 
-The backend must never trust:
+
+NestJS must never trust values simply because the frontend sends them.
+
+
+Do not trust:
 
     user_id
 
@@ -2273,17 +2399,16 @@ The backend must never trust:
 
     name
 
-or any other value simply because the SPA sends it.
 
-
-Laravel must determine the authenticated user from the server-side session.
+NestJS should determine the authenticated user from the server-side
+application session.
 
 
 --------------------------------------------------------------------------------
-Rule 2 — No tokens in the browser
+Rule 2 — No OIDC tokens in the browser
 --------------------------------------------------------------------------------
 
-The SPA should never store:
+The Nuxt application should never store:
 
     access_token
 
@@ -2298,44 +2423,76 @@ Do not put them in:
 
     sessionStorage
 
-    cookies accessible to JavaScript
-
-    Pinia state
+    JavaScript-readable cookies
 
     useState()
 
+    Pinia
+
     Vue reactive state
 
-    URL parameters
+    URL query parameters
 
-    Nuxt runtime configuration
+    Nuxt public runtime configuration
 
 
-The BFF architecture exists specifically to keep OIDC credentials and tokens
-server-side.
+The BFF architecture exists specifically to keep OIDC credentials server-side.
 
 
 --------------------------------------------------------------------------------
-Rule 3 — Decode is not validate
+Rule 3 — Do not make Nuxt the OIDC client
 --------------------------------------------------------------------------------
 
-The SPA should never authenticate a user by decoding a JWT.
+Do not add Keycloak OIDC libraries to Nuxt unless the architecture is
+intentionally changed.
 
-Even if a JWT can be decoded, that does not prove that:
+
+The intended architecture is:
+
+    Nuxt
+       |
+       v
+    NestJS
+       |
+       v
+    Keycloak
+
+
+Not:
+
+    Nuxt
+       |
+       +------> Keycloak
+       |
+       v
+    NestJS
+
+
+NestJS owns authentication.
+
+
+--------------------------------------------------------------------------------
+Rule 4 — Decode is not validate
+--------------------------------------------------------------------------------
+
+The frontend should never authenticate a user by decoding a JWT.
+
+
+Even if a JWT can be decoded, decoding does not prove:
 
 - the token was issued by the expected issuer
 - the signature is valid
 - the token is not expired
-- the token was intended for the application
-- the token has the required audience
-- the token has not been revoked
+- the token is intended for the application
+- the audience is correct
+- the token is trustworthy
 
 
-Authentication decisions belong on the backend.
+Authentication belongs on NestJS.
 
 
 --------------------------------------------------------------------------------
-Rule 4 — 401 vs 403
+Rule 5 — 401 vs 403
 --------------------------------------------------------------------------------
 
 HTTP 401 means:
@@ -2343,61 +2500,69 @@ HTTP 401 means:
     The request is not authenticated.
 
 
-The SPA should normally treat this as:
+Nuxt should normally interpret this as:
 
-    user is not logged in
+    User is not logged in.
 
 
 HTTP 403 means:
 
-    The user is authenticated but is not authorized to perform the action.
+    The user is authenticated but not authorized.
 
 
 A 403 should not automatically force the user to log in again.
 
 
 --------------------------------------------------------------------------------
-Rule 5 — Same-origin discipline
+Rule 6 — Explicit CORS
 --------------------------------------------------------------------------------
-
-Keep the frontend and API origins explicitly configured.
 
 Do not use:
 
     Access-Control-Allow-Origin: *
 
-with credentialed authentication requests.
+
+with credentialed requests.
 
 
-Use explicit allowed origins.
+Use:
+
+    http://localhost:3001
+
+
+for local development.
+
+
+Production should use the exact production frontend origin.
 
 
 --------------------------------------------------------------------------------
-Rule 6 — Session cookie protection
+Rule 7 — Session cookie protection
 --------------------------------------------------------------------------------
 
-The Laravel session cookie should be:
+The application session cookie should be:
 
     HttpOnly
 
 
-In production it should also be:
+In production:
 
     Secure
 
 
-The appropriate:
+The SameSite policy should match the deployment topology.
 
-    SameSite
 
-configuration should be selected based on the actual deployment topology.
+The frontend should not need to read the authentication cookie using
+JavaScript.
 
 
 --------------------------------------------------------------------------------
-Rule 7 — OIDC identity uniqueness
+Rule 8 — OIDC identity uniqueness
 --------------------------------------------------------------------------------
 
-OIDC identities should be identified using the issuer and subject.
+External identities should be identified using the issuer and subject.
+
 
 Conceptually:
 
@@ -2405,55 +2570,57 @@ Conceptually:
     +
     oidc_subject
 
-uniquely identifies the external identity within the application's
-identity model.
+
+should uniquely identify the external identity.
 
 
-The Laravel users table therefore uses:
-
-    unique(oidc_issuer, oidc_subject)
-
-
-rather than relying solely on email.
+Do not rely exclusively on email.
 
 
 --------------------------------------------------------------------------------
-Rule 8 — Email is not the OIDC identity
+Rule 9 — Email is not the external identity
 --------------------------------------------------------------------------------
 
 Email addresses can change.
 
-The stable external identity is generally represented by the issuer and
-subject combination.
 
-
-Therefore:
+The stable external identity should be based on:
 
     oidc_issuer + oidc_subject
 
-should be treated as the external identity key.
+
+The local database should therefore use the external identity as the identity
+key rather than assuming email is immutable.
 
 
 ================================================================================
-14. RELATED PROJECTS
+21. RELATED PROJECTS
 ================================================================================
 
-bakery-api
+bakery-api-nestjs
 
-Laravel 12 API acting as the OIDC client and Backend-for-Frontend.
+NestJS API acting as:
 
-Responsibilities:
+- Backend-for-Frontend
+- OIDC client
+- Authentication server for the application
+- Session owner
+- User identity resolver
+- Authenticated API
+
+
+NestJS responsibilities:
 
 - OIDC authorization
 - OIDC callback
-- OIDC token exchange
+- OIDC authorization-code exchange
 - OIDC identity validation
 - Local user persistence
-- Laravel session management
-- Sanctum stateful authentication
-- /api/user
-- /api/logout
+- Application session management
+- Current-user endpoint
+- Logout endpoint
 - Federated logout
+- API authorization
 
 
 Keycloak
@@ -2465,9 +2632,9 @@ Realm:
     myapp
 
 
-Client:
+Server:
 
-    nuxt-laravel-bakery
+    http://localhost:9000
 
 
 Responsibilities:
@@ -2487,17 +2654,19 @@ Responsibilities:
 
 - User interface
 - Authentication state
-- Calling Laravel /api/user
-- Calling Laravel /api/logout
-- Redirecting to Laravel login
+- Redirecting to NestJS login
+- Calling NestJS /api/user
+- Calling NestJS /api/logout
 - Displaying authenticated user information
+- Protecting frontend routes
+- Redirecting unauthenticated users to /login
 
 
-The SPA should not become an independent OIDC client.
+The Nuxt application should not become an independent OIDC client.
 
 
 ================================================================================
-15. AUTHOR
+22. AUTHOR
 ================================================================================
 
 This project was developed by:

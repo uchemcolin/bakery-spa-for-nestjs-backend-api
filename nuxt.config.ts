@@ -4,6 +4,8 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     public: {
+      /*apiBase: 'http://localhost:8001',
+      loginUrl: 'http://localhost:8001/sso/redirect',*/
       apiBase: 'http://localhost:8001',
       loginUrl: 'http://localhost:8001/sso/redirect',
     },
