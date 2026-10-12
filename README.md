@@ -1,8 +1,8 @@
 ================================================================================
-BAKERY SPA — Nuxt 4 + NestJS + Keycloak
+BAKERY SPA — Nuxt 4 + NestJS 11 + Keycloak
 ================================================================================
 
-A full-stack Single Sign-On (SSO) demonstration using Nuxt 4, NestJS, and
+A full-stack Single Sign-On (SSO) demonstration using Nuxt 4, NestJS 11, and
 Keycloak.
 
 The Nuxt 4 application acts as the frontend SPA.
